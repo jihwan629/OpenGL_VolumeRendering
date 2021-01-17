@@ -13,6 +13,10 @@ int SliceIdx = 0;
 int N = 3;
 const char *fileName = "..\\data\\bighead.txt";
 
+GVec3 *pNormal = NULL;
+double *pOpacity = NULL;
+double **pColor = NULL;
+
 // 콜백 함수 선언
 void Render();
 void Reshape(int w, int h);
@@ -25,6 +29,21 @@ void CreateImage();
 int GetIdx(int i, int j);
 int GetIdx(int i, int j, int k);
 
+// 1. 그레디언트
+void Gradient();
+// 2. 분할
+void Classfication();
+// 3. 쉐이딩
+void Shading();
+// 4. 합성
+void Composition();
+
+// 삼선형 보간법
+// 선형 보간
+double linterpol(float a, float b, double inter);
+// 이중선 보간
+double binterpol(float a, float b, float c, float d, double intera, double interb);
+
 int main(int argc, char **argv)
 {
 	// 볼륨 데이터 로딩
@@ -36,11 +55,20 @@ int main(int argc, char **argv)
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
 
 	// 윈도우 생성 및 콜백 함수 등록
-	glutCreateWindow("Slice Viewer");
+	glutCreateWindow("Volume Viewer");
 	glutDisplayFunc(Render);
 	glutReshapeFunc(Reshape);
 	glutKeyboardFunc(Keyboard);
 	glutSpecialFunc(SpecialKeyboard);
+
+	// 1. 그레디언트
+	Gradient();
+	// 2. 분할
+	Classfication();
+	// 3. 쉐이딩
+	Shading();
+	// 4. 합성
+	Composition();
 
 	// 이미지를 생성
 	CreateImage();
@@ -48,7 +76,13 @@ int main(int argc, char **argv)
 	// 이벤트를 처리를 위한 무한 루프로 진입한다.
 	glutMainLoop();
 
+	// 배열 할당 해제
 	delete[] pVolData, pImage, pScaledImage;
+	delete[] pNormal, pOpacity;
+
+	for (int i = 0; i < Depth * Height * Width; i++)
+		delete[] pColor[i];
+	delete[] pColor;
 
 	return 0;
 }
@@ -163,4 +197,84 @@ void Render()
 
 	// 칼라 버퍼 교환한다
 	glutSwapBuffers();
+}
+
+// 1. 그레디언트
+void Gradient()
+{
+	if (pNormal == NULL)
+		pNormal = new GVec3[Depth * Height * Width];
+
+	for (int i = 1; i < Depth - 1; ++i)
+	{
+		for (int j = 1; j < Height - 1; ++j)
+		{
+			for (int k = 1; k < Width - 1; ++k)
+			{
+				int vidx = GetIdx(i, j, k);
+				double nx = (pVolData[GetIdx(i, j, k + 1)] - pVolData[GetIdx(i, j, k - 1)]) / 2.0;
+				double ny = (pVolData[GetIdx(i, j + 1, k)] - pVolData[GetIdx(i, j - 1, k)]) / 2.0;
+				double nz = (pVolData[GetIdx(i + 1, j, k)] - pVolData[GetIdx(i - 1, j, k)]) / 2.0;
+				pNormal[vidx].Set(-nx, -ny, -nz);
+				pNormal[vidx].Normalize();
+			}
+		}
+	}
+}
+
+// 2. 분할
+void Classfication()
+{
+	if (pOpacity == NULL)
+		pOpacity = new double[Depth * Height * Width];
+}
+
+// 3. 쉐이딩
+void Shading()
+{
+	if (pColor == NULL)
+	{
+		*pColor = new double[Depth * Height * Width];
+		for (int i = 0; i < Depth * Height * Width; i++)
+			pColor[i] = new double[3];
+	}
+		
+}
+
+// 4. 합성
+void Composition()
+{
+
+}
+
+// 선형 보간
+double linterpol(float a, float b, double inter)
+{
+	double result = 0.0f;
+
+	if (inter > 1)
+	{
+		printf("선형 보간 오류 alpha 값 : %f\n", inter);
+		return b;
+	}
+	else
+	{
+		result = (a * (1 - inter)) + (b * inter);
+		return result;
+	}
+}
+
+// 이중 선형 보간
+double binterpol(float a, float b, float c, float d, double intera, double interb)
+{
+	double r1 = 0.0f;
+	double r2 = 0.0f;
+	double result = 0.0f;
+
+	r1 = linterpol(a, b, intera);
+	r2 = linterpol(c, d, intera);
+
+	result = linterpol((float)r1, (float)r2, interb);
+
+	return result;
 }

@@ -37,7 +37,7 @@
 
 <br>
  
- <img src="https://im7.ezgif.com/tmp/ezgif-7-65bb6920dd28.gif" width="500"/>
+ <img src="https://user-images.githubusercontent.com/31186176/104846375-84b04400-591d-11eb-8264-5c7806bb3888.gif" width="500"/>
  
 <br>
 <br>

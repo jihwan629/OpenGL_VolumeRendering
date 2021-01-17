@@ -33,7 +33,7 @@
  <br>
 
 > `data\bighead.den` 의 볼륨 데이터에서 생성한 단면 <br>
-> `SliceRender` 프로젝트를 실행하여 확인 <br>
+> `SliceRender` 프로젝트를 실행하여 확인 (방향키 위아래로 단면 )<br>
 
 <br>
  

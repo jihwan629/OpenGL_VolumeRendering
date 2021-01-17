@@ -9,13 +9,15 @@
 // 전역 변수들
 int Width, Height, Depth;
 unsigned char *pVolData = NULL, *pImage = NULL, *pScaledImage = NULL;
-int SliceIdx = 0;
 int N = 3;
 const char *fileName = "..\\data\\bighead.txt";
 
 GVec3 *pNormal = NULL;
 double *pOpacity = NULL;
-double **pColor = NULL;
+double *pColor = NULL;
+
+const unsigned char f1 = 100, f2 = 180;
+const double alpha = 0.9;
 
 // 콜백 함수 선언
 void Render();
@@ -25,7 +27,6 @@ void SpecialKeyboard(int key, int x, int y);
 
 // 함수 선언
 void LoadData(const char *fileName);
-void CreateImage();
 int GetIdx(int i, int j);
 int GetIdx(int i, int j, int k);
 
@@ -58,31 +59,30 @@ int main(int argc, char **argv)
 	glutCreateWindow("Volume Viewer");
 	glutDisplayFunc(Render);
 	glutReshapeFunc(Reshape);
-	glutKeyboardFunc(Keyboard);
-	glutSpecialFunc(SpecialKeyboard);
+	//glutKeyboardFunc(Keyboard);
+	//glutSpecialFunc(SpecialKeyboard);
 
 	// 1. 그레디언트
 	Gradient();
+	std::cout << "Gradient" << std::endl;
 	// 2. 분할
 	Classfication();
+	std::cout << "Classfication" << std::endl;
+
 	// 3. 쉐이딩
 	Shading();
+	std::cout << "Shading" << std::endl;
+
 	// 4. 합성
 	Composition();
-
-	// 이미지를 생성
-	CreateImage();
+	std::cout << "Composition" << std::endl;
 
 	// 이벤트를 처리를 위한 무한 루프로 진입한다.
 	glutMainLoop();
 
 	// 배열 할당 해제
 	delete[] pVolData, pImage, pScaledImage;
-	delete[] pNormal, pOpacity;
-
-	for (int i = 0; i < Depth * Height * Width; i++)
-		delete[] pColor[i];
-	delete[] pColor;
+	delete[] pNormal, pOpacity, pColor;
 
 	return 0;
 }
@@ -114,23 +114,6 @@ void LoadData(const char *fileName)
 	fclose(fp);
 }
 
-void CreateImage()
-{
-	if (pImage == NULL)
-		pImage = new unsigned char[Depth * Height * Width];
-
-	for (int i = 0; i < Height; i++)
-	{
-		for (int j = 0; j < Width; j++)
-		{
-			int vidx = GetIdx(SliceIdx, i, j);
-			int pidx = GetIdx(i, j);
-
-			for (int d = 0; d < 3; d++) pImage[pidx + d] = pVolData[vidx];
-		}
-	}
-}
-
 int GetIdx(int i, int j)
 {
 	return (Height - 1 - i) * Width * 3 + j * 3;
@@ -143,28 +126,18 @@ int GetIdx(int i, int j, int k)
 
 void Keyboard(unsigned char key, int x, int y)
 {
-	if (key == '1' || key == GLUT_KEY_UP) SliceIdx++;
-	if (SliceIdx >= Depth) SliceIdx = Depth - 1;
+	if (key == '1') 
 
-	if (key == '2' || key == GLUT_KEY_DOWN) SliceIdx--;
-	if (SliceIdx <= 0) SliceIdx = 0;
-
-	printf("Slide No. = %d\n", SliceIdx);
-	CreateImage();
+	if (key == '2') 
 
 	glutPostRedisplay();
 }
 
 void SpecialKeyboard(int key, int x, int y)
 {
-	if (key == GLUT_KEY_UP) SliceIdx++;
-	if (SliceIdx >= Depth) SliceIdx = Depth - 1;
+	if (key == GLUT_KEY_UP)
 
-	if (key == GLUT_KEY_DOWN) SliceIdx--;
-	if (SliceIdx <= 0) SliceIdx = 0;
-
-	printf("Slide No. = %d\n", SliceIdx);
-	CreateImage();
+	if (key == GLUT_KEY_DOWN)
 
 	glutPostRedisplay();
 }
@@ -215,8 +188,9 @@ void Gradient()
 				double nx = (pVolData[GetIdx(i, j, k + 1)] - pVolData[GetIdx(i, j, k - 1)]) / 2.0;
 				double ny = (pVolData[GetIdx(i, j + 1, k)] - pVolData[GetIdx(i, j - 1, k)]) / 2.0;
 				double nz = (pVolData[GetIdx(i + 1, j, k)] - pVolData[GetIdx(i - 1, j, k)]) / 2.0;
-				pNormal[vidx].Set(-nx, -ny, -nz);
-				pNormal[vidx].Normalize();
+
+				// 노말 값이 양수가 나와야 하므로 -1 곱함
+				pNormal[vidx].Set(-nx, -ny, -nz).Normalize();
 			}
 		}
 	}
@@ -227,54 +201,142 @@ void Classfication()
 {
 	if (pOpacity == NULL)
 		pOpacity = new double[Depth * Height * Width];
+
+	for (int i = 0; i < Depth; ++i)				// z-direction
+	{
+		for (int j = 0; j < Height; ++j)		// y-direction
+		{
+			for (int k = 0; k < Width; ++k)		// x-direction
+			{
+				int vidx = GetIdx(i, j, k);
+				unsigned char d = pVolData[vidx];
+
+				if (d > f1 && d < f2)
+				{
+					double t = (double)(f2 - d) / (double)(f2 - f1);
+					if (t <= 0.2)
+						pOpacity[vidx] = alpha * t / 0.2;
+					else if (t > 0.2 && t < 0.8)
+						pOpacity[vidx] = alpha;
+					else if (t >= 0.8)
+						pOpacity[vidx] = alpha * (5.0 - 5.0 * t);
+				}
+				else pOpacity[vidx] = 0.0;
+			}
+		}
+	}
 }
 
 // 3. 쉐이딩
+// 조명 없이 간략하게 퐁 쉐이딩
 void Shading()
 {
 	if (pColor == NULL)
+		pColor = new double[Depth * Height * Width];
+
+	// 간략화를 위해 관찰자와 라이트의 방향 벡터를 같게 하였다.
+	GVec3 L(0, -1, 0), V(0, -1, 0);
+
+	for (int i = 0; i < Depth; ++i)
 	{
-		*pColor = new double[Depth * Height * Width];
-		for (int i = 0; i < Depth * Height * Width; i++)
-			pColor[i] = new double[3];
-	}
-		
+		for (int j = 0; j < Height; ++j)
+		{
+			for (int k = 0; k < Width; ++k)
+			{
+				int vidx = GetIdx(i, j, k);
+
+				GVec3 N = pNormal[vidx];
+				GVec3 H = (V + L).Normalize();
+
+				float diff_color = 0.6;
+				float spec_color = 0.8;
+
+				pColor[vidx] = diff_color * MAX(N * L, 0.0) 
+							+ spec_color * pow(MAX(N * H, 0.0), 32.0);
+			}
+		}
+	}	
 }
 
 // 4. 합성
 void Composition()
 {
+	if (pImage == NULL)
+		pImage = new unsigned char[Width * Height * 3];
 
+	int MaxIdx = Width * Height * Depth;
+
+	for (int i = 0; i < Height; ++i)
+	{
+		for (int j = 0; j < Width; ++j)
+		{
+			GLine ray(GPos3 (j, 0, i), GVec3(0, 1, 0));
+
+			double t = 0.0;
+			float alpha_out = 0.0, color_out = 0.0;
+
+			while (alpha_out <= 1.0)
+			{
+				GPos3 pos = ray.Eval(t);
+				int x = (int)pos[0], y = (int)pos[1], z = (int)pos[2];
+
+				// 잊지 않고 0보다 작을 때도 제외시키자
+				if (x > 255 || y > 255 || z > 224 || x < 0 || y < 0) break;
+
+				// 보간하기 위한 비율 값들
+				double tx = ABS(x - pos[0]), ty = ABS(y - pos[1]), tz = ABS(z - pos[2]);
+
+				// 보간 과정
+				// 두면을 이중 선형 보간 시킨 후 나온 두점을 선형 보간한다
+				int vidxa = GetIdx(z, y, x);
+				int vidxb = GetIdx(z, y + 1, x);
+				int vidxc = GetIdx(z, y + 1, x + 1);
+				int vidxd = GetIdx(z, y, x + 1);
+
+				int vidx1a = GetIdx(z + 1, y, x);
+				int vidx1b = GetIdx(z + 1, y + 1, x);
+				int vidx1c = GetIdx(z + 1, y + 1, x + 1);
+				int vidx1d = GetIdx(z + 1, y, x + 1);
+
+				if (vidxa > MaxIdx || vidxb > MaxIdx || vidxc > MaxIdx || vidxd > MaxIdx)
+					break;
+				if (vidx1a > MaxIdx || vidx1b > MaxIdx || vidx1c > MaxIdx || vidx1d > MaxIdx)
+					break;
+
+				float co = binterpol(pColor[vidxa], pColor[vidxb], pColor[vidxc], pColor[vidxd], ty, tx);
+				float co1 = binterpol(pColor[vidx1a], pColor[vidx1b], pColor[vidx1c], pColor[vidx1d], ty, tx);
+				float color_in = linterpol(co, co1, tz);
+
+				float ao = binterpol(pOpacity[vidxa], pOpacity[vidxb], pOpacity[vidxc], pOpacity[vidxd], ty, tx);
+				float ao1 = binterpol(pOpacity[vidx1a], pOpacity[vidx1b], pOpacity[vidx1c], pOpacity[vidx1d], ty, tx);
+				float alpha_in = linterpol(ao, ao1, tz);
+
+				// 컬러와 불투명도 값을 누적한다
+				color_out = color_out + alpha_in * (1.0 - alpha_out) * color_in;
+				alpha_out = alpha_out + alpha_in * (1.0 - alpha_out);
+
+				t++;
+			}
+
+			for (int d = 0; d < 3; d++) pImage[GetIdx(i, j) + d] = MIN(color_out, 1.0) * 255;
+		}
+	}
 }
 
 // 선형 보간
 double linterpol(float a, float b, double inter)
 {
-	double result = 0.0f;
-
 	if (inter > 1)
 	{
 		printf("선형 보간 오류 alpha 값 : %f\n", inter);
 		return b;
 	}
 	else
-	{
-		result = (a * (1 - inter)) + (b * inter);
-		return result;
-	}
+		return (a * (1 - inter)) + (b * inter);
 }
 
 // 이중 선형 보간
 double binterpol(float a, float b, float c, float d, double intera, double interb)
 {
-	double r1 = 0.0f;
-	double r2 = 0.0f;
-	double result = 0.0f;
-
-	r1 = linterpol(a, b, intera);
-	r2 = linterpol(c, d, intera);
-
-	result = linterpol((float)r1, (float)r2, interb);
-
-	return result;
+	return linterpol((float)linterpol(a, b, intera), (float)linterpol(c, d, intera), interb);
 }

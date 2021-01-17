@@ -83,7 +83,7 @@ void LoadData(const char *fileName)
 void CreateImage()
 {
 	if (pImage == NULL)
-		pImage = new unsigned char[Depth * Height * Width];
+		pImage = new unsigned char[Width * Height * 3];
 
 	for (int i = 0; i < Height; i++)
 	{

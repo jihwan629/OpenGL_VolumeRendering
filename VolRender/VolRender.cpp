@@ -216,7 +216,9 @@ void Shading()
 		pColor = new double[Depth * Height * Width];
 
 	// 간략화를 위해 관찰자와 조명의 방향 벡터를 같게 하였다.
-	GVec3 V(0, -1, 0), L(0, -1, 0);
+	GVec3 V(0, -1, 0), L(0, -1, 0); // 정면
+	//GVec3 V(-1, 0, 0), L(-1, 0, 0); // 옆면
+	//GVec3 V(0, 0, -1), L(0, 0, -1);  // 윗면
 
 	for (int i = 0; i < Depth; ++i)
 	{

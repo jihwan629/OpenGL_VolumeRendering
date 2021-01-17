@@ -37,7 +37,7 @@
 
 <br>
  
- <img src="https://j.gifs.com/lxZW37.gif"/>
+ <img src="https://im7.ezgif.com/tmp/ezgif-7-65bb6920dd28.gif" width="500"/>
  
 <br>
 <br>
